@@ -12,8 +12,6 @@ impl greeter_server::Greeter for GreeterService {
         &self,
         request: tonic::Request<HelloRequest>,
     ) -> Result<tonic::Response<HelloReply>, tonic::Status> {
-        // tracing::info!("hello from server");
-
         let tracer = opentelemetry::global::tracer("tracer");
         let mut span = tracer.span_builder("span").start(&tracer);
         span.add_event("event", vec![]);
@@ -28,22 +26,14 @@ impl greeter_server::Greeter for GreeterService {
 
 #[tokio::main]
 async fn main() {
-    // let subscriber = tracing_subscriber::FmtSubscriber::new();
-    // tracing::subscriber::set_global_default(subscriber).unwrap();
-
-    let exporter = opentelemetry_stdout::SpanExporter::default();
     let provider = opentelemetry_sdk::trace::TracerProvider::builder()
-        .with_simple_exporter(exporter)
-        // .with_config(opentelemetry_sdk::trace::Config::default())
+        .with_simple_exporter(opentelemetry_otlp::new_exporter().tonic().build_span_exporter().unwrap())
         .build();
     opentelemetry::global::set_tracer_provider(provider);
 
-    let addr = "[::1]:50051".parse().unwrap();
-    let greeter = GreeterService {};
-
     tonic::transport::Server::builder()
-        .add_service(greeter_server::GreeterServer::new(greeter))
-        .serve(addr)
+        .add_service(greeter_server::GreeterServer::new(GreeterService {}))
+        .serve("[::1]:50051".parse().unwrap())
         .await
         .unwrap();
 }
