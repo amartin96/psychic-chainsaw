@@ -1,4 +1,3 @@
-use opentelemetry::trace::TracerProvider as _;
 use tracing_subscriber::layer::SubscriberExt as _;
 
 tonic::include_proto!("greeter");
@@ -30,20 +29,20 @@ async fn main() {
     ))
     .unwrap();
 
-    let provider = opentelemetry_sdk::trace::TracerProvider::builder()
-        .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
-        .build();
-    let tracer = provider.tracer("my-tracer-name");
+    let tracer = opentelemetry_otlp::new_pipeline()
+        .tracing()
+        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
+        .install_simple()
+        .unwrap();
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
     let subscriber = tracing_subscriber::Registry::default().with(filter).with(telemetry);
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
-    let addr = "[::1]:50051".parse().unwrap();
-    let greeter = GreeterService {};
+    tracing::trace_span!("server").in_scope(|| tracing::warn!("server started"));
 
     tonic::transport::Server::builder()
-        .add_service(greeter_server::GreeterServer::new(greeter))
-        .serve(addr)
+        .add_service(greeter_server::GreeterServer::new(GreeterService {}))
+        .serve("[::1]:50051".parse().unwrap())
         .await
         .unwrap();
 }
